@@ -4,6 +4,7 @@ import json
 import os
 import html
 import math
+import random
 from datetime import date, timedelta
 
 # ==========================================
@@ -48,7 +49,6 @@ def load_data():
         diaries = data.get("diaries", [])
         completion_dates = data.get("completion_dates", [])
 
-        # 데이터 형식 검증
         if not isinstance(points, (int, float)) or points < 0:
             points = 50
 
@@ -135,6 +135,9 @@ if "remaining_seconds" not in st.session_state:
 if "timer_end_time" not in st.session_state:
     st.session_state.timer_end_time = None
 
+if "current_rest_stretch" not in st.session_state:
+    st.session_state.current_rest_stretch = "🐢 거북목 탈출: 턱 당기기 (Chin Tuck)"
+
 
 # ==========================================
 # 2. 공통 함수
@@ -180,7 +183,7 @@ st.write("학생, 직장인, 주부를 위한 스마트 웰니스 정원 앱")
 
 
 # ==========================================
-# 4. 사이드바 설정
+# 4. 사이드바 설정 (숫자 직접 입력 적용)
 # ==========================================
 
 st.sidebar.header("⚙️ 설정 및 페르소나")
@@ -209,19 +212,20 @@ st.sidebar.divider()
 
 st.sidebar.header("⏰ 알림 및 타이머 설정")
 
-work_time = st.sidebar.slider(
+# 5분 단위 제한을 풀고 숫자를 직접 입력할 수 있도록 수정
+work_time = st.sidebar.number_input(
     "집중/업무 시간 (분)",
-    min_value=5,
-    max_value=60,
+    min_value=1,
+    max_value=180,
     value=25,
-    step=5
+    step=1
 )
 
-break_time = st.sidebar.slider(
+break_time = st.sidebar.number_input(
     "스트레칭 휴식 시간 (분)",
     min_value=1,
-    max_value=10,
-    value=3,
+    max_value=60,
+    value=5,
     step=1
 )
 
@@ -253,12 +257,8 @@ for item, price in items_for_sale.items():
 
         if st.session_state.points >= price:
 
-            # 골드 차감
             st.session_state.points -= price
-
-            # 구매한 아이템을 정원에 실제 추가
             st.session_state.garden.append(item)
-
             show_save_result()
 
             st.sidebar.success(
@@ -289,25 +289,25 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 with tab1:
 
-    st.subheader(f"✨ {mode}님의 힐링 정원")
+    st.subheader(f"🏡 {mode}님의 따스한 힐링 정원")
+    st.write("열심히 모은 골드로 예쁜 식물과 조각상을 심어 나만의 정원을 가꿔보세요!")
 
-    garden_display = " ".join(
-        html.escape(str(item))
+    garden_display = "  ".join(
+        str(item)
         for item in st.session_state.garden
     )
 
-    st.markdown(f"""
-    <div style="
-        padding: 25px;
-        background-color: #f0f8ff;
-        border-radius: 15px;
-        font-size: 30px;
-        text-align: center;
-        min-height: 100px;
-    ">
-        {garden_display}
-    </div>
-    """, unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown(f"""
+        <div style="
+            font-size: 36px;
+            text-align: center;
+            padding: 20px;
+            letter-spacing: 5px;
+        ">
+            {garden_display}
+        </div>
+        """, unsafe_allow_html=True)
 
     st.write(
         f"현재 보유 골드: 🪙 **{st.session_state.points}G**"
@@ -322,7 +322,7 @@ with tab1:
 
 
 # ==========================================
-# TAB 2. 스마트 타이머
+# TAB 2. 스마트 타이머 (휴식 스트레칭 연동 및 버그 수정 완료)
 # ==========================================
 
 with tab2:
@@ -394,7 +394,7 @@ with tab2:
                     st.session_state.remaining_seconds = rest_seconds
 
         # --------------------------------------
-        # 타이머 진행 및 자동 전환
+        # 타이머 진행 및 자동 전환 (스트레칭 연동 포함)
         # --------------------------------------
 
         completed_message = None
@@ -407,16 +407,22 @@ with tab2:
 
             if remaining <= 0:
 
-                # 현재 모드 종료
                 if "집중" in st.session_state.timer_mode:
 
                     completed_message = (
-                        "🎉 집중 시간 종료! 휴식 시간이 시작됩니다."
+                        "🎉 집중 시간 종료! 굳은 뼈마디를 풀며 스트레칭할 시간입니다!"
                     )
 
                     st.session_state.timer_mode = (
                         "휴식 및 스트레칭 모드"
                     )
+
+                    # 휴식 모드로 넘어갈 때 랜덤 스트레칭 자동 지정
+                    st.session_state.current_rest_stretch = random.choice([
+                        "🐢 거북목 탈출: 턱 당기기 (Chin Tuck)",
+                        "💼 수근관증후군 예방: 손목 굴근/신근 늘리기",
+                        "🪵 척추 신전: 상체 부드럽게 들어 올리기"
+                    ])
 
                     next_duration = rest_seconds
 
@@ -432,7 +438,6 @@ with tab2:
 
                     next_duration = focus_seconds
 
-                # 다음 모드를 자동으로 시작
                 st.session_state.remaining_seconds = next_duration
                 st.session_state.timer_end_time = (
                     time.time() + next_duration
@@ -445,7 +450,7 @@ with tab2:
                 )
 
         # --------------------------------------
-        # 타이머 화면 표시
+        # 타이머 화면 표시 (st.metric 및 container 사용으로 코드 노출 버그 완벽 차단)
         # --------------------------------------
 
         remaining_seconds = st.session_state.remaining_seconds
@@ -457,34 +462,30 @@ with tab2:
         else:
             status = "⏸️ 일시정지"
 
-        st.markdown(f"""
-        <div style="
-            padding: 30px;
-            background-color: #fffacd;
-            border-radius: 15px;
-            text-align: center;
-            color: #333;
-        ">
-            <div style="font-size: 18px;">
-                {html.escape(st.session_state.timer_mode)}
-            </div>
-
-            <div style="
-                font-size: 48px;
-                font-weight: bold;
-                margin: 10px 0;
-            ">
-                {mins:02d}:{secs:02d}
-            </div>
-
-            <div style="font-size: 15px;">
-                {status}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(f"<h3 style='text-align: center; color: #2e8b57;'>🌱 {st.session_state.timer_mode}</h3>", unsafe_allow_html=True)
+            
+            st.metric(
+                label="남은 시간",
+                value=f"{mins:02d}:{secs:02d}",
+                delta=status
+            )
 
         if completed_message:
             st.success(completed_message)
+
+        # --------------------------------------
+        # 휴식 모드일 때 실시간 스트레칭 가이드 카드 출력
+        # --------------------------------------
+        if "휴식" in st.session_state.timer_mode:
+            st.info(f"🧘 **[휴식 타임 추천 스트레칭]**\n\n지금 화면을 멈추고 이 동작을 3회 반복해보세요!\n\n👉 **{st.session_state.current_rest_stretch}**")
+            
+            if st.button("✨ 이 스트레칭 동작 완료! (+10G 보상받기)"):
+                st.session_state.points += 10
+                show_save_result()
+                st.success("스트레칭 완료! 🪙 10골드가 정원에 적립되었습니다.")
+                st.balloons()
+                st.rerun()
 
     timer_panel(
         current_timer_mode,
@@ -583,9 +584,7 @@ with tab3:
         if st.button("✅ 스트레칭 완료하고 골드 받기 (+30G)"):
 
             st.session_state.points += 30
-
             st.session_state.completion_dates.add(today_str)
-
             show_save_result()
 
             st.success(
@@ -637,15 +636,12 @@ with tab4:
             }
 
             st.session_state.diaries.append(new_entry)
-
             show_save_result()
 
             st.success("일기가 성공적으로 저장되었습니다!")
-
             st.rerun()
 
         else:
-
             st.warning("일기 내용을 입력해주세요.")
 
     st.divider()
@@ -653,30 +649,19 @@ with tab4:
     st.subheader("📚 나의 일기 & 기록 히스토리")
 
     if not st.session_state.diaries:
-
         st.info("아직 작성된 일기가 없습니다.")
-
     else:
-
         for index, diary in enumerate(
             reversed(st.session_state.diaries)
         ):
-
             if isinstance(diary, dict):
-
                 diary_date = diary.get("date", "")
                 diary_area = diary.get("area", "")
                 diary_content = diary.get("content", "")
 
                 with st.container(border=True):
-
-                    st.markdown(
-                        f"**📅 {diary_date} | {diary_area}**"
-                    )
-
+                    st.markdown(f"**📅 {diary_date} | {diary_area}**")
                     st.write(diary_content)
-
             else:
-
                 with st.container(border=True):
                     st.write(f"• {diary}")
